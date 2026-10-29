@@ -1,122 +1,86 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { useEffect } from "react";
+import {
+  BrowserRouter,
+  Navigate,
+  Outlet,
+  Route,
+  Routes,
+} from "react-router-dom";
+import { Provider } from "react-redux";
+import {
+  clearData,
+  loadUser,
+  signedOut,
+  store,
+  useAppDispatch,
+  useAppSelector,
+} from "./store";
+import Layout from "./components/Layout";
+import AuthPage from "./pages/AuthPage";
+import QuizList from "./pages/QuizList";
+import TakeQuiz from "./pages/TakeQuiz";
+import ManageQuestions from "./pages/ManageQuestions";
+import ManageQuizzes from "./pages/ManageQuizzes";
+import "./App.css";
 
-function App() {
-  const [count, setCount] = useState(0)
-
-  return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+function Guard({ admin = false }: { admin?: boolean }) {
+  const { user, ready } = useAppSelector((state) => state.auth);
+  if (!ready) return <p className="container py-5">Loading account…</p>;
+  if (!user) return <Navigate to="/login" replace />;
+  if (admin && !user.admin) return <Navigate to="/dashboard" replace />;
+  return <Outlet />;
 }
-
-export default App
+function Home() {
+  const user = useAppSelector((state) => state.auth.user);
+  return (
+    <div className="py-4">
+      <h2>Welcome, {user?.username}</h2>
+      <p className="text-secondary">
+        {user?.admin
+          ? "Manage quizzes and questions using the menu above."
+          : "Open Quiz to choose a quiz and test your knowledge."}
+      </p>
+    </div>
+  );
+}
+function AppRoutes() {
+  const dispatch = useAppDispatch();
+  useEffect(() => {
+    if (sessionStorage.getItem("token")) void dispatch(loadUser());
+    else dispatch(signedOut());
+    const expire = () => {
+      dispatch(signedOut());
+      dispatch(clearData());
+    };
+    window.addEventListener("session-expired", expire);
+    return () => window.removeEventListener("session-expired", expire);
+  }, [dispatch]);
+  return (
+    <Routes>
+      <Route path="/login" element={<AuthPage />} />
+      <Route path="/register" element={<AuthPage register />} />
+      <Route element={<Guard />}>
+        <Route element={<Layout />}>
+          <Route path="/dashboard" element={<Home />} />
+          <Route path="/quizzes" element={<QuizList />} />
+          <Route path="/quizzes/:quizId" element={<TakeQuiz />} />
+          <Route element={<Guard admin />}>
+            <Route path="/admin" element={<Home />} />
+            <Route path="/admin/questions" element={<ManageQuestions />} />
+            <Route path="/admin/quizzes" element={<ManageQuizzes />} />
+          </Route>
+        </Route>
+      </Route>
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+    </Routes>
+  );
+}
+export default function App() {
+  return (
+    <Provider store={store}>
+      <BrowserRouter>
+        <AppRoutes />
+      </BrowserRouter>
+    </Provider>
+  );
+}
